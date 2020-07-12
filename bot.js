@@ -1,7 +1,7 @@
 const Commando = require('discord.js-commando');
 const client = new Commando.Client({
     autoReconnect: true,
-    commandPrefix: 'lk!',
+    commandPrefix: 'lkt!',
     owner: '141382611518881792'
 });
 const fs = require('fs');
@@ -12,12 +12,12 @@ const guild = "383159459431710720";
 
 cache.put("settings", settings)
 
-var top;
-var jungle;
-var mid;
-var bot;
-var support;
 
+//Settings
+const dmUserAfter = true; // Default, can be changed to false
+var messageSentAdd = 'Successfully added the role {rolename} in {server}';
+var messageSentRemove = 'Successfully removed the role {rolename} in {server}';
+// The only variables that work rn, {rolename} and {server}
 
 //"top":"675150469286592523",
 //"bot":"675150548558807050",
@@ -43,24 +43,19 @@ client.on('error', console.error);
 
 client.once('ready', () => {
     console.log("Bot ready")
-    top = client.guilds.get(guild).roles.get(settings.top);
-    jungle = client.guilds.get(guild).roles.get(settings.jungle);
-    mid = client.guilds.get(guild).roles.get(settings.mid);
-    bot = client.guilds.get(guild).roles.get(settings.bot);
-    support = client.guilds.get(guild).roles.get(settings.support);
 
-    if (fs.existsSync('./resources/reactionRoleData.json')) {
-        fs.readFile('./resources/reactionRoleData.json', function read(err, data) {
+    if(fs.existsSync('./data/reactionRoleData.json')) {
+        fs.readFile('./data/reactionRoleData.json', function read(err, data) {
             if (err) {
                 throw err;
             }
             data = JSON.parse(data)
-
+        
             cache.put('reactionRoleInf', data);
         });
     } else {
-        fs.writeFile("./resources/reactionRoleData.json", "{}", function(err) {
-            if (err) {
+        fs.writeFile("./data/reactionRoleData.json", "{}", function(err) {
+            if(err) {
                 return console.log(err);
             }
         });
@@ -70,13 +65,13 @@ client.once('ready', () => {
 
 client.on('raw', packet => {
     if (!['MESSAGE_REACTION_ADD', 'MESSAGE_REACTION_REMOVE'].includes(packet.t)) return;
-    const channel = client.channels.get(packet.d.channel_id);
-    if (channel.messages.has(packet.d.message_id)) return;
-    channel.fetchMessage(packet.d.message_id).then(message => {
+    const channel = client.channels.cache.get(packet.d.channel_id);
+    if (channel.messages.cache.has(packet.d.message_id)) return;
+    channel.messages.fetch(packet.d.message_id).then(message => {
         const emoji = packet.d.emoji.id ? `${packet.d.emoji.name}:${packet.d.emoji.id}` : packet.d.emoji.name;
-        const reaction = message.reactions.get(emoji);
-        const reactionUser = client.users.get(packet.d.user_id);
-        if (reaction) reaction.users.set(packet.d.user_id, reactionUser);
+        const reaction = message.reactions.cache.get(emoji);
+        const reactionUser = client.users.cache.get(packet.d.user_id);
+        if (reaction) reaction.users.cache.set(packet.d.user_id, reactionUser);
         if (!reactionUser.bot) {
             if (packet.t === 'MESSAGE_REACTION_ADD') {
                 client.emit('messageReactionAdd', reaction, reactionUser);
@@ -89,52 +84,22 @@ client.on('raw', packet => {
 });
 
 client.on('messageReactionAdd', async function(reaction, user) {
-    const reactionData = cache.get('reactionRoleInf');
-    const reactionGuild = reaction.message.guild;
-    const reactionMessage = reaction.message;
-    if (reactionData.hasOwnProperty(reactionMessage.id)) {
-        var roleInData = reactionData[reactionMessage.id].filter(re => re[0] == reaction.emoji.name || re[0].name == reaction.emoji.name)
-        if (roleInData.length != 0) {
-            var guilduser = await reactionGuild.fetchMember(user);
-            var reactionRole = await reactionGuild.roles.get(roleInData[0][1]);
-            if (!guilduser.roles.has(roleInData[0][1])) {
-                guilduser.addRole(reactionRole);
+    if (!user.bot) {
+        const reactionData = cache.get('reactionRoleInf');
+        const reactionGuild = reaction.message.guild;
+        const reactionMessage = reaction.message;
+        if (reactionData.hasOwnProperty(reactionMessage.id)) {
+            var emojiName = reaction.emoji.name;
+            var roleInData = reactionData[reactionMessage.id].filter(re => re[0] == emojiName || re[0].name == emojiName)
+            if (roleInData.length != 0) {
+                var guilduser = await reactionGuild.members.fetch(user);
+                var roleData = roleInData[0][1];
+                var reactionRole = await reactionGuild.roles.cache.get(roleData);
+                if (!guilduser.roles.cache.has(roleData)) {
+                    guilduser.roles.add(reactionRole);
 
-                guilduser.send(`Successfully added the position ${reactionRole.name} in ${reactionGuild.name}`)
-
-                var roles = [top, mid, bot, support, jungle];
-
-                roles = roles.filter(rl => rl.name != reactionRole.name);
-                var hasOtherRoles = false;
-                var itemP = 0;
-
-                roles.forEach(uRole => {
-                    if (guilduser.roles.has(uRole.id)) {
-                        hasOtherRoles = true;
-                    }
-                    itemP++;
-                    if (itemP === roles.length) {
-                        if (!hasOtherRoles) {
-                            fs.readFile('./userdata.json', function read(err, data) {
-                                if (err) {
-                                    throw err;
-                                }
-                                data = JSON.parse(data);
-
-                                if (!data.hasOwnProperty(user.id)) {
-                                    data[user.id] = {}
-                                }
-
-                                data[user.id]["mainrole"] = reactionRole.id;
-                                fs.writeFile("./userdata.json", JSON.stringify(data), function(err) {
-                                    if (err) {
-                                        return console.log(err);
-                                    }
-                                });
-                            })
-                        }
-                    }
-                })
+                    if (dmUserAfter){guilduser.send(messageSentAdd.replace("{rolename}",`**${reactionRole.name}**`).replace("{server}",`**${reactionGuild.name}**`));}
+                }
             }
         }
     }
@@ -146,15 +111,16 @@ client.on('messageReactionRemove', async function(reaction, user) {
     const reactionGuild = reaction.message.guild;
     const reactionMessage = reaction.message;
     if (reactionData.hasOwnProperty(reactionMessage.id)) {
-        var roleInData = reactionData[reactionMessage.id].filter(re => re[0] == reaction.emoji.name || re[0].name == reaction.emoji.name)
+        var emojiName = reaction.emoji.name;
+        var roleInData = reactionData[reactionMessage.id].filter(re => re[0] == emojiName || re[0].name == emojiName)
         if (roleInData.length != 0) {
-            var guilduser = await reactionGuild.fetchMember(user);
-            var reactionRole = await reactionGuild.roles.get(roleInData[0][1]);
+            var guilduser = await reactionGuild.members.fetch(user);
+            var roleData = roleInData[0][1];
+            var reactionRole = await reactionGuild.roles.cache.get(roleData);
 
-            if (guilduser.roles.has(roleInData[0][1])) {
-                guilduser.removeRole(reactionRole);
-
-                guilduser.send(`Successfully removed the position ${reactionRole.name} in ${reactionGuild.name}`)
+            if (guilduser.roles.cache.has(roleData)) {
+                guilduser.roles.remove(reactionRole);
+                if (dmUserAfter){guilduser.send(messageSentRemove.replace("{rolename}",`**${reactionRole.name}**`).replace("{server}",`**${reactionGuild.name}**`));}
             }
         }
     }
