@@ -115,8 +115,8 @@ module.exports = class rolemenu extends Command {
                         }
 
                         if (msgSplitArr != null && msgSplitArr.length > 1 && msgSplitArr[0] != null && msgSplitArr[1] != null) {
-                            const tstValidRole = await msg.guild.roles.cache.find(role => role.name === msgSplitArr[0].replace(/\s+$/, ''));
-
+                            var tstValidRole = await msg.guild.roles.fetch();
+                            tstValidRole = await tstValidRole.cache.find(role => role.name === msgSplitArr[0].replace(/\s+$/, ''));
                             if (response.mentions.roles.first() || tstValidRole != null) {
                                 var unicodeStored = msgSplitArr[1];
                                 var roleMentioned;

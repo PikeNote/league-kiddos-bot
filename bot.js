@@ -2,13 +2,13 @@ const Commando = require('discord.js-commando');
 const client = new Commando.Client({
     autoReconnect: true,
     commandPrefix: 'lkt!',
-    owner: '141382611518881792'
+    owner: '141382611518881792',
+    partials: ['MESSAGE', 'CHANNEL', 'REACTION']
 });
 const fs = require('fs');
 const path = require('path');
 var cache = require('memory-cache');
 const settings = require('./settings.json');
-const guild = "383159459431710720";
 
 cache.put("settings", settings)
 
@@ -42,20 +42,20 @@ client.registry
 client.on('error', console.error);
 
 client.once('ready', () => {
-    console.log("Bot ready")
+    console.log("Bot ready || Online")
 
-    if(fs.existsSync('./data/reactionRoleData.json')) {
+    if (fs.existsSync('./data/reactionRoleData.json')) {
         fs.readFile('./data/reactionRoleData.json', function read(err, data) {
             if (err) {
                 throw err;
             }
             data = JSON.parse(data)
-        
+
             cache.put('reactionRoleInf', data);
         });
     } else {
         fs.writeFile("./data/reactionRoleData.json", "{}", function(err) {
-            if(err) {
+            if (err) {
                 return console.log(err);
             }
         });
@@ -63,27 +63,61 @@ client.once('ready', () => {
     }
 });
 
-client.on('raw', packet => {
-    if (!['MESSAGE_REACTION_ADD', 'MESSAGE_REACTION_REMOVE'].includes(packet.t)) return;
-    const channel = client.channels.cache.get(packet.d.channel_id);
-    if (channel.messages.cache.has(packet.d.message_id)) return;
-    channel.messages.fetch(packet.d.message_id).then(message => {
-        const emoji = packet.d.emoji.id ? `${packet.d.emoji.name}:${packet.d.emoji.id}` : packet.d.emoji.name;
-        const reaction = message.reactions.cache.get(emoji);
-        const reactionUser = client.users.cache.get(packet.d.user_id);
-        if (reaction) reaction.users.cache.set(packet.d.user_id, reactionUser);
-        if (!reactionUser.bot) {
-            if (packet.t === 'MESSAGE_REACTION_ADD') {
-                client.emit('messageReactionAdd', reaction, reactionUser);
-            }
-            if (packet.t === 'MESSAGE_REACTION_REMOVE') {
-                client.emit('messageReactionRemove', reaction, reactionUser);
+client.on('messageReactionAdd', async (reaction, user) => {
+    if (reaction.partial) {
+        try {
+            await reaction.fetch();
+            await user.fetch();
+        } catch (error) {
+            console.log('Something went wrong when fetching the message: ', error);
+            return;
+        }
+    }
+
+    console.log(user);
+
+    if (!user.bot) {
+        const reactionData = cache.get('reactionRoleInf');
+        const reactionGuild = reaction.message.guild;
+        const reactionMessage = reaction.message;
+        console.log("yes");
+        console.log(reactionData);
+        if (reactionData.hasOwnProperty(reactionMessage.id)) {
+            console.log("test");
+            var emojiName = reaction.emoji.name;
+            var roleInData = await reactionData[reactionMessage.id].filter(re => re[0] == emojiName || re[0].name == emojiName)
+            if (roleInData.length != 0) {
+                var guilduser = await reactionGuild.members.fetch(user);
+                var roleData = roleInData[0][1];
+                var reactionRole = await reactionGuild.roles.fetch(roleData);
+
+                console.log(reactionRole);
+                console.log(guilduser);
+
+                if (!guilduser.roles.cache.has(roleData)) {
+                    guilduser.roles.add(reactionRole);
+
+                    if (dmUserAfter) {
+                        guilduser.send(messageSentAdd.replace("{rolename}", `**${reactionRole.name}**`).replace("{server}", `**${reactionGuild.name}**`));
+                    }
+                }
             }
         }
-    });
+    }
+
 });
 
-client.on('messageReactionAdd', async function(reaction, user) {
+client.on('messageReactionRemove', async (reaction, user)  => {
+    if (reaction.partial) {
+        try {
+            await reaction.fetch();
+            await user.fetch();
+        } catch (error) {
+            console.log('Something went wrong when fetching the message: ', error);
+            return;
+        }
+    }
+
     if (!user.bot) {
         const reactionData = cache.get('reactionRoleInf');
         const reactionGuild = reaction.message.guild;
@@ -94,33 +128,16 @@ client.on('messageReactionAdd', async function(reaction, user) {
             if (roleInData.length != 0) {
                 var guilduser = await reactionGuild.members.fetch(user);
                 var roleData = roleInData[0][1];
-                var reactionRole = await reactionGuild.roles.cache.get(roleData);
-                if (!guilduser.roles.cache.has(roleData)) {
-                    guilduser.roles.add(reactionRole);
+                var reactionRole = await reactionGuild.roles.fetch(roleData);
 
-                    if (dmUserAfter){guilduser.send(messageSentAdd.replace("{rolename}",`**${reactionRole.name}**`).replace("{server}",`**${reactionGuild.name}**`));}
+                console.log(reactionRole);
+
+                if (guilduser.roles.cache.has(roleData)) {
+                    guilduser.roles.remove(reactionRole);
+                    if (dmUserAfter) {
+                        guilduser.send(messageSentRemove.replace("{rolename}", `**${reactionRole.name}**`).replace("{server}", `**${reactionGuild.name}**`));
+                    }
                 }
-            }
-        }
-    }
-
-});
-
-client.on('messageReactionRemove', async function(reaction, user) {
-    const reactionData = cache.get('reactionRoleInf');
-    const reactionGuild = reaction.message.guild;
-    const reactionMessage = reaction.message;
-    if (reactionData.hasOwnProperty(reactionMessage.id)) {
-        var emojiName = reaction.emoji.name;
-        var roleInData = reactionData[reactionMessage.id].filter(re => re[0] == emojiName || re[0].name == emojiName)
-        if (roleInData.length != 0) {
-            var guilduser = await reactionGuild.members.fetch(user);
-            var roleData = roleInData[0][1];
-            var reactionRole = await reactionGuild.roles.cache.get(roleData);
-
-            if (guilduser.roles.cache.has(roleData)) {
-                guilduser.roles.remove(reactionRole);
-                if (dmUserAfter){guilduser.send(messageSentRemove.replace("{rolename}",`**${reactionRole.name}**`).replace("{server}",`**${reactionGuild.name}**`));}
             }
         }
     }
