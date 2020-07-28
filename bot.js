@@ -74,25 +74,17 @@ client.on('messageReactionAdd', async (reaction, user) => {
         }
     }
 
-    console.log(user);
-
     if (!user.bot) {
         const reactionData = cache.get('reactionRoleInf');
         const reactionGuild = reaction.message.guild;
         const reactionMessage = reaction.message;
-        console.log("yes");
-        console.log(reactionData);
         if (reactionData.hasOwnProperty(reactionMessage.id)) {
-            console.log("test");
             var emojiName = reaction.emoji.name;
             var roleInData = await reactionData[reactionMessage.id].filter(re => re[0] == emojiName || re[0].name == emojiName)
             if (roleInData.length != 0) {
                 var guilduser = await reactionGuild.members.fetch(user);
                 var roleData = roleInData[0][1];
                 var reactionRole = await reactionGuild.roles.fetch(roleData);
-
-                console.log(reactionRole);
-                console.log(guilduser);
 
                 if (!guilduser.roles.cache.has(roleData)) {
                     guilduser.roles.add(reactionRole);
@@ -129,8 +121,6 @@ client.on('messageReactionRemove', async (reaction, user)  => {
                 var guilduser = await reactionGuild.members.fetch(user);
                 var roleData = roleInData[0][1];
                 var reactionRole = await reactionGuild.roles.fetch(roleData);
-
-                console.log(reactionRole);
 
                 if (guilduser.roles.cache.has(roleData)) {
                     guilduser.roles.remove(reactionRole);
